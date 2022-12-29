@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Metro Water Systems Map</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no">
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.11.0/mapbox-gl.css" rel="stylesheet">
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.11.0/mapbox-gl.js"></script>
+<style>
+body { margin: 0; padding: 0; }
+#map { position: absolute; top: 0; bottom: 0; width: 100%; }
+</style>
+</head>
+<body>
+<style>
+    body {
+        overflow: hidden;
+    }
+
+    body * {
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        -moz-user-select: none;
+        -ms-user-select: none;
+        user-select: none;
+    }
+    #header {
+      height:48px;
+    }
+    #mapbox {
+        position: absolute;
+        top: 48px;
+        bottom: 0;
+        width: 100%;
+    }
+    select {
+      display: inline-block;
+      margin: 20px 0px 0 20px; /* adds a right margin to the first element */
+    }
+
+</style>
+<script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-compare/v0.4.0/mapbox-gl-compare.js"></script>
+<link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-compare/v0.4.0/mapbox-gl-compare.css" type="text/css">
+<div id="header">
+    <select id="metroSelect"></select>
+</div>
+<div id="mapbox"></div>
+<script src="js/metroCounties.js"></script>
+<script type="module">
+
+
+	mapboxgl.accessToken = 'pk.eyJ1IjoiYmx1ZWNvbmR1aXQiLCJhIjoiY2t0eWdqcnM0MzNidTJvcm94NnE0Y3M2biJ9.v74bmczLSr2Eb8iw8h3B3w';
+    const map = new mapboxgl.Map({
+        container: 'mapbox',
+        // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+        style: 'mapbox://styles/blueconduit/cl4ymcdgy000414pd5v1ggem5',
+        center: [-93.121, 39.199],
+        zoom: 3.4,
+        //interactive: false
+    });
+
+    var metroSelect = document.getElementById("metroSelect");
+
+    // Iterate through the metroCounties dictionary
+    for (var key in metroCounties) {
+      var name = metroCounties[key]["NAME"];
+      var bbox = metroCounties[key]["bbox"];
+
+      var option = document.createElement("option");
+      option.value = bbox;
+      option.text = name;
+      metroSelect.add(option);
+    }
+
+    // Add an event listener to the select element to execute a function when an option is selected
+    metroSelect.addEventListener("change", function() {
+      var selectedOption = metroSelect.options[metroSelect.selectedIndex];
+      var bbox = selectedOption.value;
+      var sw = bbox.split(",").map(parseFloat).slice(0, 2);
+      var ne = bbox.split(",").map(parseFloat).slice(2);
+      //const bounds = new mapboxgl.LngLatBounds(bbox[:1],bbox[2:]);
+      map.fitBounds([sw,ne], {duration: 3500});
+      // delay then get data from API
+      getWaterSystemData(map, bbox);
+    });
+
+    function selectRandomOption(selectElement) {
+      const options = selectElement.options;
+      const numOptions = options.length;
+      const randomIndex = Math.floor(Math.random() * numOptions);
+      selectElement.selectedIndex = randomIndex;
+      const changeEvent = new Event('change');
+      selectElement.dispatchEvent(changeEvent);
+    }
+
+    map.on("load", function () {
+      map.addSource('water-systems', {type:'geojson',data:{}});
+      map.addLayer({
+        id: 'systems',
+        type: 'fill',
+        source: 'water-systems',
+        paint: {
+          'fill-color': [
+  							"interpolate",
+  							["linear"],
+  							["get", "pop_served"],
+  							1000,
+  							"#174e87",
+  							10000,
+  							"#5ca3ea",
+  							50000,
+  							"#f7d694",
+  							100000,
+  							"#e8aa44",
+  							1000000,
+  							"#fb3939"
+					 ],
+          'fill-opacity': 0.5
+        },
+        visible:true
+      });
+      map.moveLayer('systems', 'settlement-subdivision-label');
+      //console.log(map.getStyle().layers);
+      selectRandomOption(metroSelect);
+    });
+
+
+    function getWaterSystemData(map, bbox) {
+      var API_PATH = "https://services6.arcgis.com/hR19wnqEg78ptZn4/arcgis/rest/services/preliminary_nationwide_lsl_survey_with_predictions/FeatureServer/0/";
+      var QUERY_PATH = `${API_PATH}query?where=1=1&outFields=*&geometry=${
+        bbox.replace(",","%2C")
+      }&outgeometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outSR=4326&f=geojson`
+      //var API_PATH = `http://127.0.0.1:5000/water-system?bbox=${bbox}`
+      //console.log(`Fetching from ${TEST_PATH}`);
+      fetch(QUERY_PATH)
+        .then(function(response) {
+          return response.json();
+        })
+        .then(function(data) {
+          map.getSource('water-systems').setData(data);
+        })
+    }
+
+</script>
+
+</body>
+</html>
